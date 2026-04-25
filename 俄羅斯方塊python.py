@@ -15,7 +15,7 @@ SCREEN_HEIGHT = ROWS * BLOCK_SIZE
 
 # 設定畫面
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("俄羅斯方塊 - 硬降功能版")
+pygame.display.set_caption("俄羅斯方塊 - 等級加速版")
 
 # 定義顏色
 BLACK = (0, 0, 0)
@@ -73,7 +73,7 @@ def clear_lines(board):
         new_board.insert(0, [0] * COLS)
     return new_board, cleared
 
-def draw_board(screen, board, current, next_piece, score, paused):
+def draw_board(screen, board, current, next_piece, score, level, paused):
     screen.fill(BLACK)
     for y in range(ROWS):
         for x in range(COLS):
@@ -92,19 +92,29 @@ def draw_board(screen, board, current, next_piece, score, paused):
         pygame.draw.line(screen, GRAY, (0, y * BLOCK_SIZE), (GAME_WIDTH, y * BLOCK_SIZE))
 
     font = pygame.font.SysFont("notosanstc", 30)
+    
+    # 畫分數
     score_label = font.render("Score:", True, WHITE)
     score_num = font.render(str(score), True, WHITE)
-    screen.blit(score_label, (GAME_WIDTH + 20, 50))
-    screen.blit(score_num, (GAME_WIDTH + 20, 80))
+    screen.blit(score_label, (GAME_WIDTH + 20, 30))
+    screen.blit(score_num, (GAME_WIDTH + 20, 60))
 
+    # 畫等級
+    level_label = font.render("Level:", True, WHITE)
+    level_num = font.render(str(level), True, WHITE)
+    screen.blit(level_label, (GAME_WIDTH + 20, 110))
+    screen.blit(level_num, (GAME_WIDTH + 20, 140))
+
+    # 畫預覽方塊
     next_label = font.render("Next:", True, WHITE)
-    screen.blit(next_label, (GAME_WIDTH + 20, 150))
-    preview_x, preview_y = GAME_WIDTH + 50, 200
+    screen.blit(next_label, (GAME_WIDTH + 20, 210))
+    preview_x, preview_y = GAME_WIDTH + 50, 260
     for y, row in enumerate(next_piece.shape):
         for x, cell in enumerate(row):
             if cell:
                 pygame.draw.rect(screen, next_piece.color, (preview_x + x * BLOCK_SIZE, preview_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
 
+    # 暫停遮罩
     if paused:
         overlay = pygame.Surface((GAME_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
@@ -120,8 +130,31 @@ def main():
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
     current = Tetromino()
     next_piece = Tetromino()
-    fall_time, fall_speed, score = 0, 0.5, 0
+    
+    # 初始化狀態與進度變數
+    fall_time = 0
+    fall_speed = 0.5   # 初始下落間隔時間（秒）
+    score = 0
+    total_lines = 0    # 紀錄總消除行數
+    level = 1          # 初始等級
     paused = False
+
+    # 處理方塊落地後的通用邏輯
+    def handle_lock_down(current_y):
+        nonlocal board, score, total_lines, level, fall_speed, current, next_piece
+        
+        merge(board, current.shape, current.x, current_y, current.color)
+        board, cleared = clear_lines(board)
+        
+        if cleared > 0:
+            score += cleared * 100
+            total_lines += cleared
+            # 每消除 10 行升一級
+            level = total_lines // 10 + 1
+            # 每升一級，下落間隔減少 0.05 秒，極限最快為 0.05 秒
+            fall_speed = max(0.05, 0.5 - (level - 1) * 0.05)
+            
+        current, next_piece = next_piece, Tetromino()
 
     running = True
     while running:
@@ -134,10 +167,7 @@ def main():
                 if not check_collision(board, current.shape, current.x, current.y + 1):
                     current.y += 1
                 else:
-                    merge(board, current.shape, current.x, current.y, current.color)
-                    board, cleared = clear_lines(board)
-                    score += cleared * 100
-                    current, next_piece = next_piece, Tetromino()
+                    handle_lock_down(current.y)
                     if check_collision(board, current.shape, current.x, current.y):
                         running = False
                 fall_time = 0
@@ -163,19 +193,16 @@ def main():
                         current.rotate()
                         if check_collision(board, current.shape, current.x, current.y):
                             current.shape = old_shape
-                    # 硬降功能實施
+                    # 硬降功能
                     elif event.key == pygame.K_SPACE:
                         while not check_collision(board, current.shape, current.x, current.y + 1):
                             current.y += 1
-                        merge(board, current.shape, current.x, current.y, current.color)
-                        board, cleared = clear_lines(board)
-                        score += cleared * 100
-                        current, next_piece = next_piece, Tetromino()
-                        fall_time = 0 # 重置下落計時
+                        handle_lock_down(current.y)
+                        fall_time = 0
                         if check_collision(board, current.shape, current.x, current.y):
                             running = False
 
-        draw_board(screen, board, current, next_piece, score, paused)
+        draw_board(screen, board, current, next_piece, score, level, paused)
     pygame.quit()
 
 if __name__ == "__main__":
