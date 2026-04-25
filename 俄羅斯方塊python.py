@@ -15,7 +15,7 @@ SCREEN_HEIGHT = ROWS * BLOCK_SIZE
 
 # 設定畫面
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("俄羅斯方塊 - 暫停功能版")
+pygame.display.set_caption("俄羅斯方塊 - 硬降功能版")
 
 # 定義顏色
 BLACK = (0, 0, 0)
@@ -73,34 +73,25 @@ def clear_lines(board):
         new_board.insert(0, [0] * COLS)
     return new_board, cleared
 
-# 繪製畫面
 def draw_board(screen, board, current, next_piece, score, paused):
     screen.fill(BLACK)
-    
-    # 1. 畫遊戲區域內已固定的方塊
     for y in range(ROWS):
         for x in range(COLS):
             block_color = board[y][x]
             if block_color:
-                pygame.draw.rect(screen, block_color,
-                                 (x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
+                pygame.draw.rect(screen, block_color, (x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
     
-    # 2. 畫當前方塊
     for y, row in enumerate(current.shape):
         for x, cell in enumerate(row):
             if cell:
-                pygame.draw.rect(screen, current.color,
-                                 ((current.x + x) * BLOCK_SIZE, (current.y + y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
+                pygame.draw.rect(screen, current.color, ((current.x + x) * BLOCK_SIZE, (current.y + y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
 
-    # 3. 畫網格
     for x in range(COLS + 1):
         pygame.draw.line(screen, GRAY, (x * BLOCK_SIZE, 0), (x * BLOCK_SIZE, SCREEN_HEIGHT))
     for y in range(ROWS + 1):
         pygame.draw.line(screen, GRAY, (0, y * BLOCK_SIZE), (GAME_WIDTH, y * BLOCK_SIZE))
 
-    # 4. 畫側邊欄
     font = pygame.font.SysFont("notosanstc", 30)
-    
     score_label = font.render("Score:", True, WHITE)
     score_num = font.render(str(score), True, WHITE)
     screen.blit(score_label, (GAME_WIDTH + 20, 50))
@@ -108,51 +99,37 @@ def draw_board(screen, board, current, next_piece, score, paused):
 
     next_label = font.render("Next:", True, WHITE)
     screen.blit(next_label, (GAME_WIDTH + 20, 150))
-
-    preview_x = GAME_WIDTH + 50
-    preview_y = 200
+    preview_x, preview_y = GAME_WIDTH + 50, 200
     for y, row in enumerate(next_piece.shape):
         for x, cell in enumerate(row):
             if cell:
-                pygame.draw.rect(screen, next_piece.color,
-                                 (preview_x + x * BLOCK_SIZE, preview_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
+                pygame.draw.rect(screen, next_piece.color, (preview_x + x * BLOCK_SIZE, preview_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE))
 
-    # 5. 畫暫停提示
     if paused:
-        # 建立一個半透明的遮罩 (Surface)
         overlay = pygame.Surface((GAME_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150)) # 最後一個參數是透明度 (0-255)
+        overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
-        
         pause_font = pygame.font.SysFont("notosanstc", 50)
         pause_text = pause_font.render("PAUSED", True, RED)
-        # 將文字置中於遊戲區
-        text_rect = pause_text.get_rect(center=(GAME_WIDTH // 2, SCREEN_HEIGHT // 2))
-        screen.blit(pause_text, text_rect)
+        screen.blit(pause_text, pause_text.get_rect(center=(GAME_WIDTH // 2, SCREEN_HEIGHT // 2)))
 
     pygame.display.flip()
 
 def main():
     clock = pygame.time.Clock()
     board = [[0 for _ in range(COLS)] for _ in range(ROWS)]
-    
     current = Tetromino()
     next_piece = Tetromino()
-    
-    fall_time = 0
-    fall_speed = 0.5
-    score = 0
-    paused = False # 初始化暫停狀態
+    fall_time, fall_speed, score = 0, 0.5, 0
+    paused = False
 
     running = True
     while running:
-        # 即使暫停也需要更新時鐘，但我們有邏輯判斷是否處理下落
         delta_time = clock.get_rawtime()
         clock.tick()
 
         if not paused:
             fall_time += delta_time
-            # 下落邏輯
             if fall_time / 1000 > fall_speed:
                 if not check_collision(board, current.shape, current.x, current.y + 1):
                     current.y += 1
@@ -160,8 +137,7 @@ def main():
                     merge(board, current.shape, current.x, current.y, current.color)
                     board, cleared = clear_lines(board)
                     score += cleared * 100
-                    current = next_piece
-                    next_piece = Tetromino()
+                    current, next_piece = next_piece, Tetromino()
                     if check_collision(board, current.shape, current.x, current.y):
                         running = False
                 fall_time = 0
@@ -169,13 +145,9 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
             elif event.type == pygame.KEYDOWN:
-                # 暫停鍵邏輯：無論是否暫停都偵測 P 鍵
                 if event.key == pygame.K_p:
                     paused = not paused
-                
-                # 只有在非暫停狀態下才處理遊戲控制
                 if not paused:
                     if event.key == pygame.K_LEFT:
                         if not check_collision(board, current.shape, current.x - 1, current.y):
@@ -191,9 +163,19 @@ def main():
                         current.rotate()
                         if check_collision(board, current.shape, current.x, current.y):
                             current.shape = old_shape
+                    # 硬降功能實施
+                    elif event.key == pygame.K_SPACE:
+                        while not check_collision(board, current.shape, current.x, current.y + 1):
+                            current.y += 1
+                        merge(board, current.shape, current.x, current.y, current.color)
+                        board, cleared = clear_lines(board)
+                        score += cleared * 100
+                        current, next_piece = next_piece, Tetromino()
+                        fall_time = 0 # 重置下落計時
+                        if check_collision(board, current.shape, current.x, current.y):
+                            running = False
 
         draw_board(screen, board, current, next_piece, score, paused)
-
     pygame.quit()
 
 if __name__ == "__main__":
